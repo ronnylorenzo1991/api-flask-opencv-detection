@@ -1,0 +1,10 @@
+/__pycache__
+/venv
+/migrations
+/resources
+/controllers/__pycache__
+/models/__pycache__
+/routes/__pycache__
+/sockets/__pycache__
+/templates/__pycache__
+config.py
