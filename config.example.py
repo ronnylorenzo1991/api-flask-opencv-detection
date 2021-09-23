@@ -16,7 +16,9 @@ class DevelopmentConfig(Config):
     CELERY_BACKEND_URL = 'redis://localhost:6379/0'
     SQLALCHEMY_DATABASE_URI = 'mysql://root:root@localhost/detection_api'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    
+    SQLALCHEMY_POOL_SIZE = 100
+    SQLALCHEMY_POOL_TIMEOUT = 300
+
 class ProductionConfig(Config):
     DEBUG = False
 
