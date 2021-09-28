@@ -19,7 +19,7 @@ Flask-Cors==3.0.10
 flask-marshmallow==0.14.0
 Flask-Migrate==3.1.0
 # Editable install with no version control (Flask-RESTful==0.3.9)
--e /home/lorenzo/Documents/WORK/Avanze/Project/api-flask-detection/venv/lib/python3.8/site-packages
+#-e /home/lorenzo/Documents/WORK/Avanze/Project/api-flask-detection/venv/lib/python3.8/site-packages
 Flask-SocketIO==5.1.1
 Flask-SQLAlchemy==2.5.1
 greenlet==1.1.1
