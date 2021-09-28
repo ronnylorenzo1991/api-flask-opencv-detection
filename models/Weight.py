@@ -21,7 +21,7 @@ class TasksSchema(ma.Schema):
 
 class EventSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'number', 'description', 'classes', 'source', 'score', 'image', 'date')
+        fields = ('id', 'number', 'description', 'classes', 'coordinates', 'source', 'score', 'image', 'date')
 
 class WeightSchema(ma.Schema):
     tasks = ma.Nested(TasksSchema, many=True)

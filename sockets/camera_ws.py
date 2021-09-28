@@ -17,8 +17,6 @@ import json
 
 socketio = SocketIO(cors_allowed_origins="*")
 
-# sockets
-
 
 @socketio.on('ping')
 def pongResponse():
@@ -31,6 +29,7 @@ def enable_camera_detection(id):
     camera.activated = True
     db.session.commit()
     emit(f"detection_{id}")
+
 
 @socketio.on('enable_task_detection')
 def enable_task_detection(id):
@@ -45,13 +44,13 @@ def enable_task_detection(id):
 
     cfg_file = UPLOAD_CFG_FOLDER + task.weight.filename + '.cfg'
     weight_file = UPLOAD_WEIGHTS_FOLDER + task.weight.filename + '.weight'
-    
+
     net = cv.dnn.readNet(weight_file, cfg_file)
     net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
     net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA_FP16)
 
     model = cv.dnn_DetectionModel(net)
-    model.setInputParams(size=(416, 416), scale=1/255, swapRB=True)
+    model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
     if can_run_job(task) and is_camera_activated(task.camera.id):
         capture = cv.VideoCapture('boats.mp4')  # task.camera.url
         task.status = "2"
@@ -65,7 +64,7 @@ def enable_task_detection(id):
 
             ret_val, image_capture = capture.read()
             frame_counter += 1
-            if ret_val == False:
+            if not ret_val:
                 task.status = "0"
                 update_camera_status(task.camera.id)
                 emit(f"connection_failed_{id}", {
@@ -79,27 +78,27 @@ def enable_task_detection(id):
                 image_capture, Conf_threshold, NMS_threshold)
 
             image_name = ''.join(random.choices(
-                    string.ascii_letters+string.digits, k=20))    
-            cv.imwrite(
-                BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture) 
+                string.ascii_letters + string.digits, k=20))
 
-            for (classid, score, box) in zip(classes, scores, boxes):
-                color = COLORS[int(classid) % len(COLORS)]
+            # save clean image
+            cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
+
+            for (class_id, score, box) in zip(classes, scores, boxes):
+                color = COLORS[int(class_id) % len(COLORS)]
                 label = "%s : %f" % (
-                    class_name[classid[0]], (score*100).round())
+                    class_name[class_id[0]], (score * 100).round())
 
                 cv.rectangle(image_capture, box, color, 1)
-                cv.putText(image_capture, label, (box[0], box[1]-10),
+                cv.putText(image_capture, label, (box[0], box[1] - 10),
                            cv.FONT_HERSHEY_COMPLEX, 0.3, color, 1)
 
-                cv.imwrite(
-                    BASE_DIR + f'/resources/images/event_detection/{image_name}.png', image_capture)
-                print(class_name)
-                save_event(task, class_name[classid[0]], score*100, image_name)
+                cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.png', image_capture)
+
+                save_event(task, class_name[class_id[0]], score * 100, image_name, box)
                 emit(f"event_generated", broadcast=True)
-            
-            endingTime = time.time() - starting_time
-            fps = frame_counter/endingTime
+
+            ending_time = time.time() - starting_time
+            fps = frame_counter / ending_time
 
             # write camera name and FPS
             cv.putText(image_capture, f'{task.camera.name} FPS: {fps}', (20, 50),
@@ -112,35 +111,37 @@ def enable_task_detection(id):
             }, broadcast=True)
             emit(f"detection_init_{id}", broadcast=True)
             db.session.remove()
-    
+
     emit(f"connection_failed_{id}", {
-                    'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
-                })
+        'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
+    })
 
 
-def save_event(task, labels, score, image_name):
+def save_event(task, labels, score, image_name, box):
     last_event = Event.query.order_by(text('id desc')).first()
     e_number = get_next_number(last_event)
     e_description = f"Evento detectado en {task.camera.name}"
     e_score = round(score[0])
     e_image = image_name
     e_classes = labels
-    date = datetime.now()
-    currentCamera = Camera.query.get(task.camera_id)
-    currentWeight = Weight.query.get(task.weight_id)
+    e_coordinates = box.tolist()
+    e_date = datetime.now()
+    current_camera = Camera.query.get(task.camera_id)
+    current_weight = Weight.query.get(task.weight_id)
     event = Event(
         description=e_description,
         number=e_number,
         score=e_score,
         image=e_image,
         classes=e_classes,
-        date=date,
+        coordinates=e_coordinates,
+        date=e_date,
     )
 
     try:
         db.session.add(event)
-        currentCamera.events.append(event)
-        currentWeight.events.append(event)
+        current_camera.events.append(event)
+        current_weight.events.append(event)
         db.session.commit()
     except exc.SQLAlchemyError as e:
         db.session.rollback()
