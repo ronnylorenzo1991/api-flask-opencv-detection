@@ -20,6 +20,10 @@ db.init_app(app)
 socketio.init_app(app)
 migrate = Migrate(app, db)
 
+@app.route('/')
+def index():
+    return 'the api is active'
+
 app.register_blueprint(camera_bp, url_prefix='/camera')
 app.register_blueprint(event_bp, url_prefix='/event')
 app.register_blueprint(weight_bp, url_prefix='/weight')
