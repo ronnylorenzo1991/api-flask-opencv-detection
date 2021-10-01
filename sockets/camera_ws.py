@@ -52,7 +52,7 @@ def enable_task_detection(id):
     model = cv.dnn_DetectionModel(net)
     model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
     if can_run_job(task) and is_camera_activated(task.camera.id):
-        capture = cv.VideoCapture('boats.mp4')  # task.camera.url
+        capture = cv.VideoCapture(task.camera.url)  # task.camera.url
         task.status = "2"
         db.session.commit()
 
