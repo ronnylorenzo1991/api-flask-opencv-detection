@@ -58,7 +58,8 @@ def enable_task_detection(id):
 
         starting_time = time.time()
         frame_counter = 0
-        while True:
+        ret_val, image_capture = capture.read()
+        while ret_val:
             if not is_task_running(task.id):
                 break
 
