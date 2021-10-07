@@ -36,6 +36,7 @@ def get_all():
         'data': result
     })
 
+
 def create():
     wj_weight_id = request.form['weightId']
     wj_camera_id = request.form['cameraId']
@@ -63,6 +64,7 @@ def create():
         return jsonify({
             'message': 'Tarea Creada con éxito',
         })
+
 
 def edit(id):
     weight = db.session.query(Weight).get(request.form['weightId'])
