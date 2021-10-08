@@ -52,28 +52,34 @@ def enable_task_detection(id):
     model = cv.dnn_DetectionModel(net)
     model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
     if can_run_job(task) and is_camera_activated(task.camera.id):
+        print(f'Iniciando detección para {task.camera.name}')
         capture = cv.VideoCapture(task.camera.url)  # task.camera.url
         task.status = "2"
         db.session.commit()
 
         starting_time = time.time()
         frame_counter = 0
-        ret_val, image_capture = capture.read()
-        while ret_val:
+        success, image_capture = capture.read()
+        if not success:
+            print('No hay conexión con el recurso solicitado')
+            task.status = "0"
+            update_camera_status(task.camera.id)
+            emit(f"connection_failed_{id}", {
+                'message': "No hay conexión con el recurso solicitado",
+            })
+            db.session.commit()
+        while True:
             if not is_task_running(task.id):
+                print('El proceso ha sido detenido')
                 break
+            if not capture.isOpened():
+                continue
 
-            ret_val, image_capture = capture.read()
+            success, image_capture = capture.read()
             frame_counter += 1
-            if not ret_val:
-                task.status = "0"
-                update_camera_status(task.camera.id)
-                emit(f"connection_failed_{id}", {
-                    'message': "No hay conexión con el recurso solicitado",
-                })
-                db.session.commit()
-                db.session.remove()
-                break
+            if not success:
+                time.sleep(50)
+                continue
 
             classes, scores, boxes = model.detect(
                 image_capture, Conf_threshold, NMS_threshold)
@@ -81,10 +87,10 @@ def enable_task_detection(id):
             image_name = ''.join(random.choices(
                 string.ascii_letters + string.digits, k=20))
 
-            # save clean image
-            cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
 
             for (class_id, score, box) in zip(classes, scores, boxes):
+                # save clean image
+                cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
                 color = COLORS[int(class_id) % len(COLORS)]
                 label = "%s : %f" % (
                     class_name[class_id[0]], (score * 100).round())
@@ -112,7 +118,7 @@ def enable_task_detection(id):
             }, broadcast=True)
             emit(f"detection_init_{id}", broadcast=True)
             db.session.remove()
-
+    print('proceso detenido')
     emit(f"connection_failed_{id}", {
         'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
     })
