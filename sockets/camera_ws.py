@@ -60,7 +60,7 @@ def enable_task_detection(id):
         starting_time = time.time()
         frame_counter = 0
         success, image_capture = capture.read()
-        if not success:
+        if not success or not capture.isOpened():
             print('No hay conexión con el recurso solicitado')
             task.status = "0"
             update_camera_status(task.camera.id)
@@ -72,17 +72,22 @@ def enable_task_detection(id):
             if not is_task_running(task.id):
                 print('El proceso ha sido detenido')
                 break
-            if not capture.isOpened():
-                continue
 
             success, image_capture = capture.read()
             frame_counter += 1
             if not success:
                 time.sleep(50)
+                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
                 continue
 
-            classes, scores, boxes = model.detect(
-                image_capture, Conf_threshold, NMS_threshold)
+            try:
+                classes, scores, boxes = model.detect(
+                    image_capture, Conf_threshold, NMS_threshold)
+            except cv.error as e:
+                print(e)
+                time.sleep(50)
+                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
+                continue
 
             image_name = ''.join(random.choices(
                 string.ascii_letters + string.digits, k=20))
@@ -118,10 +123,12 @@ def enable_task_detection(id):
             }, broadcast=True)
             emit(f"detection_init_{id}", broadcast=True)
             db.session.remove()
-    print('proceso detenido')
-    emit(f"connection_failed_{id}", {
-        'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
-    })
+
+    if not is_camera_activated(task.camera.id):
+        print('fuente no activa')
+        emit(f"connection_failed_{id}", {
+            'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
+        })
 
 
 def save_event(task, labels, score, image_name, box):
