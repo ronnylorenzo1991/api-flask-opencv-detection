@@ -9,25 +9,23 @@ class Weight(db.Model):
     classes = db.Column(db.JSON, nullable=False)
     tasks = db.relationship("Task", backref=db.backref('weight'))
     events = db.relationship("Event", backref=db.backref('weight'))
-    
+
     def __init__(self, filename, description, classes):
         self.filename = filename
         self.classes = classes
         self.description = description
 
+
 class TasksSchema(ma.Schema):
     class Meta:
         fields = ('id', 'status', 'start', 'end', 'weight_id')
 
-class EventSchema(ma.Schema):
-    class Meta:
-        fields = ('id', 'number', 'description', 'classes', 'coordinates', 'source', 'score', 'image', 'date')
 
 class WeightSchema(ma.Schema):
     tasks = ma.Nested(TasksSchema, many=True)
-    events = ma.Nested(EventSchema, many=True)
+
     class Meta:
-        fields = ('id', 'filename', 'description', 'classes', 'tasks', 'events')
+        fields = ('id', 'filename', 'description', 'classes', 'tasks')
 
 
 weight_schema = WeightSchema()
