@@ -10,6 +10,7 @@ from routes.task_bp import task_bp
 from routes.default_bp import default_bp
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
+import os
 
 app = Flask(__name__)
 app.config.from_object(DevelopmentConfig)
@@ -20,9 +21,22 @@ db.init_app(app)
 socketio.init_app(app)
 migrate = Migrate(app, db)
 
+
 @app.route('/')
 def index():
     return 'the api is active'
+
+
+@app.route('/get-weights-files')
+def get_weights():
+    content = os.listdir(UPLOAD_WEIGHTS_FOLDER)
+    file_names = []
+    for file in content:
+        if os.path.isfile(os.path.join(UPLOAD_WEIGHTS_FOLDER, file)) and file.endswith('.weight'):
+            name = file.split(".")
+            file_names.append(name[0])
+    return jsonify({'files': file_names})
+
 
 app.register_blueprint(camera_bp, url_prefix='/camera')
 app.register_blueprint(event_bp, url_prefix='/event')
@@ -30,8 +44,10 @@ app.register_blueprint(weight_bp, url_prefix='/weight')
 app.register_blueprint(default_bp, url_prefix='/default')
 app.register_blueprint(task_bp, url_prefix='/task')
 
+
 def index():
     return render_template('index.html')
+
 
 if __name__ == '__main__':
     db = SQLAlchemy(app)
