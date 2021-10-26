@@ -33,42 +33,48 @@ def enable_camera_detection(id):
 
 @socketio.on('enable_task_detection')
 def enable_task_detection(id):
-    Conf_threshold = 0.6
-    NMS_threshold = 0.4
-    COLORS = [(0, 255, 0), (0, 0, 255), (255, 0, 0),
-              (255, 255, 0), (255, 0, 255), (0, 255, 255)]
-
+    # Getting current task
     task = db.session.query(Task).get(id)
-
-    class_name = json.loads(task.weight.classes)
-
-    cfg_file = UPLOAD_CFG_FOLDER + task.weight.filename + '.cfg'
-    weight_file = UPLOAD_WEIGHTS_FOLDER + task.weight.filename + '.weight'
-
-    net = cv.dnn.readNet(weight_file, cfg_file)
-    net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
-    net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA_FP16)
-
-    model = cv.dnn_DetectionModel(net)
-    model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
+    # Run Detection
     if can_run_job(task) and is_camera_activated(task.camera.id):
-        print(f'Iniciando detección para {task.camera.name}')
-        capture = cv.VideoCapture(task.camera.url)  # task.camera.url
-        task.status = "2"
-        db.session.commit()
+        # Set Config values
+        cfg_file = UPLOAD_CFG_FOLDER + task.weight.filename + '.cfg'
+        weight_file = UPLOAD_WEIGHTS_FOLDER + task.weight.filename + '.weight'
+        class_name = task.weight.classes
 
+        conf_threshold = 0.6
+        nms_threshold = 0.4
+        colors = [(0, 255, 0), (0, 0, 255), (255, 0, 0),
+                  (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+
+        net = cv.dnn.readNet(weight_file, cfg_file)
+        net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
+        net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA_FP16)
+
+        model = cv.dnn_DetectionModel(net)
+        model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
         starting_time = time.time()
+        last_event_time = time.time()
+        last_box = []
+
         frame_counter = 0
+
+        # Update console status
+        print(f'Iniciando detección para {task.camera.name}')
+        toggle_activate_task(task.id, "2")
+
+        capture = cv.VideoCapture(task.camera.url)  # task.camera.url
         success, image_capture = capture.read()
         if not success or not capture.isOpened():
             print('No hay conexión con el recurso solicitado')
-            task.status = "0"
+            toggle_activate_task(task.id, "0")
             update_camera_status(task.camera.id)
             emit(f"connection_failed_{id}", {
                 'message': "No hay conexión con el recurso solicitado",
             })
-            db.session.commit()
+
         while True:
+            # Check status for stop task
             if not is_task_running(task.id):
                 print('El proceso ha sido detenido')
                 break
@@ -76,37 +82,42 @@ def enable_task_detection(id):
             success, image_capture = capture.read()
             frame_counter += 1
             if not success:
-                time.sleep(50)
+                time.sleep(20)
                 capture = cv.VideoCapture(task.camera.url)  # task.camera.url
                 continue
 
             try:
                 classes, scores, boxes = model.detect(
-                    image_capture, Conf_threshold, NMS_threshold)
+                    image_capture, conf_threshold, nms_threshold)
             except cv.error as e:
                 print(e)
-                time.sleep(50)
-                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
+                time.sleep(20)
+                capture = cv.VideoCapture(task.camera.url) # task.camera.url
                 continue
 
             image_name = ''.join(random.choices(
                 string.ascii_letters + string.digits, k=20))
 
-
             for (class_id, score, box) in zip(classes, scores, boxes):
                 # save clean image
                 cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
-                color = COLORS[int(class_id) % len(COLORS)]
+                color = colors[int(class_id) % len(colors)]
                 label = "%s : %f" % (
                     class_name[class_id[0]], (score * 100).round())
 
                 cv.rectangle(image_capture, box, color, 1)
                 cv.putText(image_capture, label, (box[0], box[1] - 10),
                            cv.FONT_HERSHEY_COMPLEX, 0.3, color, 1)
-
+                # TODO: remove next line after resolve draw coordinates over clear image at frontend
                 cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.png', image_capture)
+                if not is_same_detection_event(last_box, image_capture, box, last_event_time, time.time()):
+                    try:
+                        save_event(task, class_name[class_id[0]], score * 100, image_name, box)
+                        last_event_time = time.time()
+                        last_box = box
+                    except:
+                        continue
 
-                save_event(task, class_name[class_id[0]], score * 100, image_name, box)
                 emit(f"event_generated", broadcast=True)
 
             ending_time = time.time() - starting_time
@@ -205,3 +216,24 @@ def update_camera_status(id):
 def is_task_running(id):
     task = db.session.query(Task).get(id)
     return task.status == "2"
+
+
+def toggle_activate_task(id, status):
+    task = db.session.query(Task).get(id)
+    task.status = status
+    db.session.commit()
+
+
+def is_same_detection_event(last_box, image, box, last_time, now_time):
+    margin = 50
+    diff_time = now_time - last_time
+    comp1 = []
+    comp2 = []
+    if len(last_box):
+     comp1 = box >= last_box - margin
+     comp2 = box <= last_box + margin
+
+    if all(comp1) and all(comp2) and diff_time < 20:
+        return True
+    else:
+        return False
