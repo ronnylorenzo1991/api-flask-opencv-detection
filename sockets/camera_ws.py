@@ -92,15 +92,14 @@ def enable_task_detection(id):
             except cv.error as e:
                 print(e)
                 time.sleep(20)
-                capture = cv.VideoCapture(task.camera.url) # task.camera.url
+                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
                 continue
 
             image_name = ''.join(random.choices(
                 string.ascii_letters + string.digits, k=20))
-
+            # save clean image
+            cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
             for (class_id, score, box) in zip(classes, scores, boxes):
-                # save clean image
-                cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
                 color = colors[int(class_id) % len(colors)]
                 label = "%s : %f" % (
                     class_name[class_id[0]], (score * 100).round())
@@ -140,6 +139,11 @@ def enable_task_detection(id):
         emit(f"connection_failed_{id}", {
             'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
         })
+    else:
+        print('Tarea Pendiente')
+        emit(f"detection_init_{id}")
+
+
 
 
 def save_event(task, labels, score, image_name, box):
@@ -192,13 +196,19 @@ def get_next_number(event):
 
 
 def can_run_job(task):
-    return (task.status == "0" or task.status == "1") and is_in_time(task.start, task.end)
+    return (task.status == "0" or task.status == "1") and is_in_time(task)
 
 
-def is_in_time(start, end):
+def is_in_time(task):
+    start = task.start
+    end = task.end
     now = datetime.now().time()
-
-    return now >= start and now <= end
+    if start <= now <= end:
+        return True
+    else:
+        task.status = '1'
+        db.session.commit()
+        return False
 
 
 def update_camera_status(id):
@@ -230,8 +240,8 @@ def is_same_detection_event(last_box, image, box, last_time, now_time):
     comp1 = []
     comp2 = []
     if len(last_box):
-     comp1 = box >= last_box - margin
-     comp2 = box <= last_box + margin
+        comp1 = box >= last_box - margin
+        comp2 = box <= last_box + margin
 
     if all(comp1) and all(comp2) and diff_time < 20:
         return True

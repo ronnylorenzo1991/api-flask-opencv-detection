@@ -26,6 +26,12 @@ migrate = Migrate(app, db)
 def index():
     return 'the api is active'
 
+@app.route('/enable_task_detection/<id>', methods=['POST'])
+def enable_task_detection_route(id):
+    enable_task_detection(id)
+    return jsonify({'message': 'Tarea activada'})
+
+
 
 @app.route('/get-weights-files')
 def get_weights():
