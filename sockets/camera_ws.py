@@ -8,12 +8,14 @@ import time
 import random
 import string
 from sqlalchemy.sql.expression import text
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from sqlalchemy import exc, func
 from models.Camera import *
 from models.Event import *
 from flask_socketio import SocketIO, emit
 import json
+import numpy as np
+import shutil
 
 socketio = SocketIO(cors_allowed_origins="*")
 
@@ -33,8 +35,8 @@ def enable_camera_detection(id):
 
 @socketio.on('enable_task_detection')
 def enable_task_detection(id):
-    # Getting current task
-    task = db.session.query(Task).get(id)
+    task = db.session.query(Task).get(id)  # Getting current task
+
     # Run Detection
     if can_run_job(task) and is_camera_activated(task.camera.id):
         # Set Config values
@@ -55,26 +57,29 @@ def enable_task_detection(id):
         model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
         starting_time = time.time()
         last_event_time = time.time()
-        last_box = []
+        last_event = event_schema.dump(
+            db.session.query(Event.coordinates, Event.classes).order_by(Event.id.desc()).first())
+        if last_event != {}:
+            last_event_class = last_event['classes']
+        else:
+            last_event_class = ''
 
         frame_counter = 0
 
-        # Update console status
         print(f'Iniciando detección para {task.camera.name}')
-        toggle_activate_task(task.id, "2")
+        toggle_activate_task(task.id, "2")  # Update task status to in process
 
-        capture = cv.VideoCapture(task.camera.url)  # task.camera.url
+        capture = cv.VideoCapture(task.camera.url)
         success, image_capture = capture.read()
         if not success or not capture.isOpened():
             print('No hay conexión con el recurso solicitado')
-            toggle_activate_task(task.id, "0")
+            toggle_activate_task(task.id, "0")  # Update task status to stopped
             update_camera_status(task.camera.id)
             emit(f"connection_failed_{id}", {
                 'message': "No hay conexión con el recurso solicitado",
             })
 
         while True:
-            # Check status for stop task
             if not is_task_running(task.id):
                 print('El proceso ha sido detenido')
                 break
@@ -82,8 +87,8 @@ def enable_task_detection(id):
             success, image_capture = capture.read()
             frame_counter += 1
             if not success:
-                time.sleep(20)
-                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
+                time.sleep(10)
+                capture = cv.VideoCapture(task.camera.url)
                 continue
 
             try:
@@ -91,29 +96,31 @@ def enable_task_detection(id):
                     image_capture, conf_threshold, nms_threshold)
             except cv.error as e:
                 print(e)
-                time.sleep(20)
-                capture = cv.VideoCapture(task.camera.url)  # task.camera.url
+                time.sleep(10)
+                capture = cv.VideoCapture(task.camera.url)
                 continue
 
-            image_name = ''.join(random.choices(
-                string.ascii_letters + string.digits, k=20))
-            # save clean image
-            cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.clean.png', image_capture)
+            # save temp clean image
+            cv.imwrite(BASE_DIR + f'/resources/images/temp_detection_image/temp.png', image_capture)
             for (class_id, score, box) in zip(classes, scores, boxes):
                 color = colors[int(class_id) % len(colors)]
                 label = "%s : %f" % (
                     class_name[class_id[0]], (score * 100).round())
-
                 cv.rectangle(image_capture, box, color, 1)
                 cv.putText(image_capture, label, (box[0], box[1] - 10),
                            cv.FONT_HERSHEY_COMPLEX, 0.3, color, 1)
-                # TODO: remove next line after resolve draw coordinates over clear image at frontend
-                cv.imwrite(BASE_DIR + f'/resources/images/event_detection/{image_name}.png', image_capture)
-                if not is_same_detection_event(last_box, image_capture, box, last_event_time, time.time()):
+
+                if not is_same_detection_event(box, last_event_time, time.time(),
+                                               last_event_class, class_name[class_id[0]]):
                     try:
+                        image_name = ''.join(random.choices(
+                            string.ascii_letters + string.digits, k=20))
+                        # Copy temp image to event detection folder
+                        shutil.copy(BASE_DIR + f'/resources/images/temp_detection_image/temp.png',
+                                    BASE_DIR + f'/resources/images/event_detection/{image_name}.png')
                         save_event(task, class_name[class_id[0]], score * 100, image_name, box)
                         last_event_time = time.time()
-                        last_box = box
+                        last_event_class = class_name[class_id[0]]
                     except:
                         continue
 
@@ -128,6 +135,8 @@ def enable_task_detection(id):
 
             image_capture = cv.imencode('.jpg', image_capture)[1].tobytes()
             image_capture = base64.b64encode(image_capture).decode('utf-8')
+
+            # Streaming detection signal
             emit(f"detection_{task.id}", {
                 'image': "data:image/jpeg;base64,{}".format(image_capture),
             }, broadcast=True)
@@ -139,11 +148,9 @@ def enable_task_detection(id):
         emit(f"connection_failed_{id}", {
             'message': "No se puede procesar esta tarea. Revise que la fuente este habilitada",
         })
-    else:
+    elif task.status == '1':  # Status 1 pending
         print('Tarea Pendiente')
         emit(f"detection_init_{id}")
-
-
 
 
 def save_event(task, labels, score, image_name, box):
@@ -196,7 +203,7 @@ def get_next_number(event):
 
 
 def can_run_job(task):
-    return (task.status == "0" or task.status == "1") and is_in_time(task)
+    return (task.status == "0" or task.status == "1") and is_in_time(task)  # Status 0 stopped, 1 pending
 
 
 def is_in_time(task):
@@ -206,7 +213,7 @@ def is_in_time(task):
     if start <= now <= end:
         return True
     else:
-        task.status = '1'
+        task.status = '1'  # Status 2 pending
         db.session.commit()
         return False
 
@@ -216,7 +223,7 @@ def update_camera_status(id):
     camera.activated = False
     is_run = False
     for task in camera.tasks:
-        if task.status == '2':
+        if task.status == '2':  # Status 2 in process
             is_run = True
     if is_run:
         camera.activated = True
@@ -225,7 +232,7 @@ def update_camera_status(id):
 
 def is_task_running(id):
     task = db.session.query(Task).get(id)
-    return task.status == "2"
+    return task.status == "2"  # Status 2 in process
 
 
 def toggle_activate_task(id, status):
@@ -234,16 +241,30 @@ def toggle_activate_task(id, status):
     db.session.commit()
 
 
-def is_same_detection_event(last_box, image, box, last_time, now_time):
-    margin = 50
+def is_same_detection_event(box, last_time, now_time, last_event_class, event_class):
     diff_time = now_time - last_time
-    comp1 = []
-    comp2 = []
-    if len(last_box):
-        comp1 = box >= last_box - margin
-        comp2 = box <= last_box + margin
+    # difference time less than 2 minutes (120 sec)
+    return diff_time < 120 and last_event_class == event_class and exist_in_last_events(box, event_class)
 
-    if all(comp1) and all(comp2) and diff_time < 20:
-        return True
-    else:
-        return False
+
+def exist_in_last_events(box, classes):
+    exist = False
+    margin = 50  # Distance margin between coordinate values
+    comp_results1 = []
+    comp_results2 = []
+    now_date = datetime.now()
+    past_date = datetime.now() - timedelta(hours=0, minutes=10)
+    if len(box):
+        last_ten_events = events_schema.dump(
+            db.session.query(Event.coordinates).filter(Event.classes == classes).filter(
+                Event.date.between(past_date, now_date)).order_by(Event.id.desc()).limit(10))
+
+        for item in last_ten_events:
+            last_box = np.array(item['coordinates'])
+            if len(last_box):
+                comp_results1 = box >= last_box - margin
+                comp_results2 = box <= last_box + margin
+                if all(comp_results1) and all(comp_results2):
+                    exist = True
+                    break
+    return exist

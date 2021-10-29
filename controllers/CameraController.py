@@ -51,7 +51,6 @@ def get(id):
     return jsonify({'camera': result})
     
 def create():
-    print('here')
     c_name = request.form['name']
     c_url = request.form['url']
     c_activate = distutils.util.strtobool(request.form['activated'])

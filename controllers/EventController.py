@@ -7,7 +7,9 @@ from sqlalchemy import exc, and_, func, or_
 import datetime
 import calendar
 from flask_sqlalchemy import SQLAlchemy
+
 db = SQLAlchemy()
+
 
 def get_all():
     startDate = ''
@@ -16,7 +18,7 @@ def get_all():
     weights = []
     cameraConds = []
     weightsConds = []
-   
+
     if request.args.get('startDate'):
         startDate = datetime.datetime.strptime(request.args.get('startDate'), "%m/%d/%Y")
     if request.args.get('endDate'):
@@ -26,15 +28,15 @@ def get_all():
         for camera in cameras:
             cameraConds.append(Event.camera_id == camera)
     if request.args.get('weights'):
-        weights = request.args.get('weights').split(",")    
+        weights = request.args.get('weights').split(",")
         for weight in weights:
             weightsConds.append(Event.weight_id == weight)
-    
+
     sort = request.args.get('sort').split("|")
     sort_dir = text(sort[0] + " " + sort[1]) if sort[0] else text('id desc')
     per_page = int(request.args.get('per_page'))
     page = int(request.args.get('page'))
-    events =  db.session.query(Event)
+    events = db.session.query(Event)
     events = events.filter(and_(Event.date >= startDate, Event.date <= endDate))
     events = events.filter(or_(*cameraConds))
     events = events.filter(or_(*weightsConds))
@@ -135,14 +137,14 @@ def total_by_month():
             cameraConds.append(Event.camera_id == camera)
 
     if request.args.get('weights'):
-        weights = request.args.get('weights').split(",") 
+        weights = request.args.get('weights').split(",")
         for weight in weights:
-            weightsConds.append(Event.weight_id == weight)   
+            weightsConds.append(Event.weight_id == weight)
 
     if startYear == endYear:
         startMonth = int(request.args.get('startDate').partition('/')[0])
         endMonth = int(request.args.get('endDate').partition('/')[0])
-       
+
         while startMonth <= endMonth:
             labels.append(month_labels[startMonth - 1])
             num_days = calendar.monthrange(startYear, startMonth)[1]
@@ -161,7 +163,7 @@ def total_by_month():
             start_date = datetime.date(startYear, 1, 1)
             end_date = datetime.date(startYear, 12, 31)
             events = db.session.query(Event).filter(
-            and_(Event.date >= start_date, Event.date <= end_date))
+                and_(Event.date >= start_date, Event.date <= end_date))
             events = events.filter(or_(*cameraConds))
             events = events.filter(or_(*weightsConds))
             results.append(events.count())
@@ -232,7 +234,6 @@ def get_next_number(event):
 
 
 def get_image(name):
-    
     filename = BASE_DIR + f'/resources/images/event_detection/{name}.png'
     print(filename)
     return send_file(filename, mimetype='image/png')
