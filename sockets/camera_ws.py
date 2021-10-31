@@ -207,9 +207,13 @@ def can_run_job(task):
 
 
 def is_in_time(task):
-    start = task.start
-    end = task.end
-    now = datetime.now().time()
+    start = datetime.strptime(f"{date.today()} {task.start}", '%Y-%m-%d %H:%M:%S')
+    end = datetime.strptime(f"{date.today()} {task.end}", '%Y-%m-%d %H:%M:%S')
+    now = datetime.now()
+
+    if task.start > task.end:
+        end = end + timedelta(days=1)
+
     if start <= now <= end:
         return True
     else:
