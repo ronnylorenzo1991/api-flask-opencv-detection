@@ -33,7 +33,7 @@ def enable_camera_detection(id):
     emit(f"detection_{id}")
 
 
-@socketio.on('enable_task_detection')
+@socketio.on('enable_task_detection', namespace='/enable_task_detection')
 def enable_task_detection(id):
     task = db.session.query(Task).get(id)  # Getting current task
 
@@ -77,7 +77,7 @@ def enable_task_detection(id):
             update_camera_status(task.camera.id)
             emit(f"connection_failed_{id}", {
                 'message': "No hay conexión con el recurso solicitado",
-            })
+            }, namespace='/enable_task_detection')
 
         while True:
             if not is_task_running(task.id):
@@ -124,7 +124,7 @@ def enable_task_detection(id):
                     except:
                         continue
 
-                emit(f"event_generated", broadcast=True)
+                emit(f"event_generated", broadcast=True, namespace='/enable_task_detection')
 
             ending_time = time.time() - starting_time
             fps = frame_counter / ending_time
@@ -139,8 +139,8 @@ def enable_task_detection(id):
             # Streaming detection signal
             emit(f"detection_{task.id}", {
                 'image': "data:image/jpeg;base64,{}".format(image_capture),
-            }, broadcast=True)
-            emit(f"detection_init_{id}", broadcast=True)
+            }, broadcast=True, namespace='/enable_task_detection')
+            emit(f"detection_init_{id}", broadcast=True, namespace='/enable_task_detection')
             db.session.remove()
 
     if not is_camera_activated(task.camera.id):
@@ -150,7 +150,7 @@ def enable_task_detection(id):
         })
     elif task.status == '1':  # Status 1 pending
         print('Tarea Pendiente')
-        emit(f"detection_init_{id}")
+        emit(f"detection_init_{id}", namespace='/enable_task_detection')
 
 
 def save_event(task, labels, score, image_name, box):
