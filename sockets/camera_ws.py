@@ -43,7 +43,7 @@ def enable_task_detection(id):
         cfg_file = UPLOAD_CFG_FOLDER + task.weight.filename + '.cfg'
         weight_file = UPLOAD_WEIGHTS_FOLDER + task.weight.filename + '.weight'
         class_name = task.weight.classes
-
+        dsize = (640, 360)
         conf_threshold = 0.6
         nms_threshold = 0.4
         colors = [(0, 255, 0), (0, 0, 255), (255, 0, 0),
@@ -52,7 +52,7 @@ def enable_task_detection(id):
         net = cv.dnn.readNet(weight_file, cfg_file)
         net.setPreferableBackend(cv.dnn.DNN_BACKEND_CUDA)
         net.setPreferableTarget(cv.dnn.DNN_TARGET_CUDA_FP16)
-
+        frame_counter = 0
         model = cv.dnn_DetectionModel(net)
         model.setInputParams(size=(416, 416), scale=1 / 255, swapRB=True)
         starting_time = time.time()
@@ -63,8 +63,6 @@ def enable_task_detection(id):
             last_event_class = last_event['classes']
         else:
             last_event_class = ''
-
-        frame_counter = 0
 
         print(f'Iniciando detección para {task.camera.name}')
         toggle_activate_task(task.id, "2")  # Update task status to in process
@@ -91,6 +89,7 @@ def enable_task_detection(id):
                 capture = cv.VideoCapture(task.camera.url)
                 continue
 
+            image_capture = cv.resize(image_capture, dsize)
             try:
                 classes, scores, boxes = model.detect(
                     image_capture, conf_threshold, nms_threshold)
