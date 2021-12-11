@@ -16,6 +16,7 @@ from flask_socketio import SocketIO, emit
 import json
 import numpy as np
 import shutil
+import requests
 
 socketio = SocketIO(cors_allowed_origins="*")
 
@@ -117,7 +118,8 @@ def enable_task_detection(id):
                         # Copy temp image to event detection folder
                         shutil.copy(BASE_DIR + f'/resources/images/temp_detection_image/temp.png',
                                     BASE_DIR + f'/resources/images/event_detection/{image_name}.png')
-                        save_event(task, class_name[class_id[0]], score * 100, image_name, box)
+                        event = save_event(task, class_name[class_id[0]], score * 100, image_name, box)
+                        activate_alerts(task.id, event.id)
                         last_event_time = time.time()
                         last_event_class = class_name[class_id[0]]
                     except:
@@ -151,6 +153,13 @@ def enable_task_detection(id):
         print('Tarea Pendiente')
         emit(f"detection_init_{id}", namespace='/enable_task_detection')
 
+def activate_alerts(task_id, event_id):
+    payload = {
+        'task_id': task_id,
+        'event_id': event_id,
+    }
+    requests.post('http://avanze-detection.test/api/task_alert', json=payload)
+    print('hecho post')
 
 def save_event(task, labels, score, image_name, box):
     last_event = Event.query.order_by(text('id desc')).first()
@@ -184,9 +193,8 @@ def save_event(task, labels, score, image_name, box):
 
         return jsonify({'message': error, }), 400
     else:
-        return jsonify({
-            'message': 'Event created succesfully',
-        })
+        db.session.flush()
+        return event
 
 
 def is_camera_activated(id):
@@ -248,6 +256,15 @@ def is_same_detection_event(box, last_time, now_time, last_event_class, event_cl
     diff_time = now_time - last_time
     # difference time less than 2 minutes (120 sec)
     return diff_time < 120 and last_event_class == event_class and exist_in_last_events(box, event_class)
+
+
+def task_has_alerts(task):
+    alerts = task.alerts
+    print(alerts)
+    if alerts is not None:
+        return True
+    else:
+        return False
 
 
 def exist_in_last_events(box, classes):

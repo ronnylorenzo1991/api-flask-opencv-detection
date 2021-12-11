@@ -4,4 +4,4 @@ from flask_marshmallow import Marshmallow
 db = SQLAlchemy()
 ma = Marshmallow()
 
-from . import Weight, Camera, Event, Task
+from . import Weight, Camera, Event, Task, Alert
