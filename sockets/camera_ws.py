@@ -158,7 +158,7 @@ def activate_alerts(task_id, event_id):
         'task_id': task_id,
         'event_id': event_id,
     }
-    requests.post('http://avanze-detection.test/api/task_alert', json=payload)
+    requests.post('http://auchac.avanze.test/task_alert', json=payload)
     print('hecho post')
 
 def save_event(task, labels, score, image_name, box):
