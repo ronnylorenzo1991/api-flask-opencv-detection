@@ -17,8 +17,9 @@ import json
 import numpy as np
 import shutil
 import requests
+import eventlet
 
-socketio = SocketIO(cors_allowed_origins="*")
+socketio = SocketIO(cors_allowed_origins="*", async_mode='eventlet')
 
 
 @socketio.on('ping')
@@ -143,7 +144,7 @@ def enable_task_detection(id):
             }, broadcast=True, namespace='/enable_task_detection')
             emit(f"detection_init_{id}", broadcast=True, namespace='/enable_task_detection')
             db.session.remove()
-
+            eventlet.sleep(0)
     if not is_camera_activated(task.camera.id):
         print('fuente no activa')
         emit(f"connection_failed_{id}", {

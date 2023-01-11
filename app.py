@@ -11,6 +11,9 @@ from routes.default_bp import default_bp
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 import os
+import eventlet
+from eventlet import wsgi
+eventlet.monkey_patch()
 
 app = Flask(__name__)
 app.config.from_object(DevelopmentConfig)

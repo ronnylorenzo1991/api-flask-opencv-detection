@@ -2,6 +2,9 @@
 
 Integration with Flask-Cors,Flask-SQLalchemy,and OpenCV extensions.
 
+### Before install requirements
+sudo apt-get install python3-dev default-libmysqlclient-dev build-essential
+
 ### Extension:
 - SQL ORM: [Flask-SQLalchemy](http://flask-sqlalchemy.pocoo.org/2.1/)
 
